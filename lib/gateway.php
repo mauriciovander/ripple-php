@@ -31,6 +31,7 @@ class gateway {
 	
 	/************************************************************************************/
 	
+	
 	/**
 	 * This method is used for registering a user in the gateway
 	 * @param string $email
