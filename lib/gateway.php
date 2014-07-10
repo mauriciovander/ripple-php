@@ -5,10 +5,12 @@
  *
  */
 class gateway {
-	// TODO - Insert your code here
 	private $gateway_url;
 	private $gateway_user;
 	private $gateway_password;
+	private $gateway_cold_wallet;
+	
+	/************************************************************************************/
 	
 	/**
 	 */
@@ -16,20 +18,23 @@ class gateway {
 		$this->gateway_url = 'https://' . GATEWAY_SERVER_ADDRESS;
 		$this->gateway_user = GATEWAY_SERVER_USER;
 		$this->gateway_password = GATEWAY_SERVER_PASSWORD;
+		$this->gateway_cold_wallet = GATEWAY_COLD_WALLET;
 	}
+	
+	/************************************************************************************/
 	
 	/**
 	 */
 	function __destruct() {
-		
 		// TODO - Insert your code here
 	}
 	
+	/************************************************************************************/
 	
 	/**
 	 * This method is used for registering a user in the gateway
-	 * @param unknown $email
-	 * @param unknown $ripple_address
+	 * @param string $email
+	 * @param string $ripple_address
 	 * @return Ambigous <boolean, mixed>|boolean
 	 */
 	function register($email,$ripple_address){
@@ -53,9 +58,58 @@ class gateway {
 		return false;		
 	}
 	
+	/************************************************************************************/
 	
+	/**
+	 * Check for valid trustlines between the user and the cold wallet
+	 * Logic explained inline
+	 * @param string $ripple_address
+	 * @param string $currency
+	 * @param double $amount
+	 * @return Ambigous boolean|double|array
+	 */
+	function trustlines($ripple_address,$currency=NULL,$amount=NULL){
+		$result = $this->get('/v1/trustlines/'.$ripple_address);
+		
+		if(!$result || !$result->success) return false;
+		if(!isset($result->trustlines)) return false;
+
+		// search for trust lines between the user and the gateway
+		$trustlines = array();
+		foreach($result->trustlines as $trustline){
+			if($trustline->account == $this->gateway_cold_wallet){
+				$trustlines[$trustline->currency] = $trustline->limit;
+			}
+		}
+		
+		// if no trustlines are found between the user and the gateway, 
+		// method should return false
+		if(empty($trustlines)) return false;
+		
+		// if no currency is set as a parameter, returns all trustlines for this gateway
+		// as an array of currency=>limit pairs
+		if(is_null($currency)) return $trustlines;
+		
+		// if currency parameter is set, but no trust line is found for this 
+		// particular currency, return false 
+		if(!array_key_exists($currency, $trustlines)) return false;
+		
+		// if no amount parameter is set, just return the trustline limit for selected currency
+		if(is_null($amount)) return $trustlines[$currency];
+
+		// if amount is set, returns true if amount is below the trustline limit, 
+		// or false if amount exceeds the trustline limit 
+		return $trustlines[$currency]>=$amount;				
+	}
 	
+	/************************************************************************************/
 	
+	/** performs curl -X POST to the gateway
+	 * 
+	 * @param string $method
+	 * @param array $data (key=>value pairs)
+	 * @return array|boolean
+	 */
 	private function post($method, $data = array()) {
 		$url = $this->gateway_url . $method;
 		$encoded = http_build_query ( $data ); // substr($encoded, 0, strlen($encoded)-1);
@@ -86,6 +140,14 @@ class gateway {
 		
 	}
 	
+	/************************************************************************************/
+	
+	/** performs curl -X GET to the gateway
+	 * 
+	 * @param string $method
+	 * @param array $data (key=>value pairs)
+	 * @return array|boolean
+	 */
 	private function get($method, $data = array()) {
 		$url = $this->gateway_url.$method;
 		if (count ( $data )) $url .= '?' . http_build_query ( $data );
@@ -113,6 +175,9 @@ class gateway {
 		if(json_last_error()==JSON_ERROR_NONE) return $obj;
 		return false;
 	}
+	
+	/************************************************************************************/
+	
 }
 
 ?>
