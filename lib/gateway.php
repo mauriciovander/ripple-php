@@ -9,6 +9,7 @@ class gateway {
 	private $gateway_user;
 	private $gateway_password;
 	private $gateway_cold_wallet;
+	private $gateway_currencies;
 	
 	/************************************************************************************/
 	
@@ -19,6 +20,13 @@ class gateway {
 		$this->gateway_user = GATEWAY_SERVER_USER;
 		$this->gateway_password = GATEWAY_SERVER_PASSWORD;
 		$this->gateway_cold_wallet = GATEWAY_COLD_WALLET;
+		$this->gateway_currencies = explode('|', GATEWAY_CURRENCIES);
+
+		// Al currencies mus be varchar(3):
+		foreach ($this->gateway_currencies as &$c){
+			$c=trim($c);
+			if(strlen($c)!=3) unset($c);
+		}
 	}
 	
 	/************************************************************************************/
@@ -89,18 +97,40 @@ class gateway {
 		
 		// if no currency is set as a parameter, returns all trustlines for this gateway
 		// as an array of currency=>limit pairs
-		if(is_null($currency)) return $trustlines;
+		if(is_null($currency) || !in_array($currency, $this->gateway_currencies)) return $trustlines;
 		
 		// if currency parameter is set, but no trust line is found for this 
 		// particular currency, return false 
 		if(!array_key_exists($currency, $trustlines)) return false;
 		
 		// if no amount parameter is set, just return the trustline limit for selected currency
-		if(is_null($amount)) return $trustlines[$currency];
+		if(is_null($amount) || !is_numeric($amount)) return $trustlines[$currency];
 
 		// if amount is set, returns true if amount is below the trustline limit, 
 		// or false if amount exceeds the trustline limit 
 		return $trustlines[$currency]>=$amount;				
+	}
+	
+	/************************************************************************************/
+	
+	/**
+	 * Register a deposit in the ripple network
+	 * @param integer $external_account_id
+	 * @param string $currency
+	 * @param double $amount
+	 * @return array|boolean
+	 */
+	function recordDeposit($external_account_id, $currency, $amount){
+		if(!is_numeric($external_account_id)) return false;
+		if(!is_numeric($amount) || $amount<=0) return false;
+		if(!in_array($currency,$this->gateway_currencies)) return false;
+		
+		$data = array('external_account_id'=>$external_account_id,
+				'amount'=>$amount,
+				'currency'=>$currency
+		);
+		$result = $this->post('/v1/deposits',$data);
+		return $result;	
 	}
 	
 	/************************************************************************************/
